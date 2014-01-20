@@ -26,8 +26,8 @@ import configparser
 apiPatterns = [
 	{"pattern": r"^(git@github.com):(.+)$", "name": "github"},
 	{"pattern": r"^(https://github.com)/(.+)$", "name": "github"},
-	#{"pattern": r"^(git@bitbucket.org):(.+)$", "name": "bitbucket"},
-	#{"pattern": r"^(https://bitbucket.org)/(.+)$", "name": "bitbucket"},
+	{"pattern": r"^(git@bitbucket.org):(.+)$", "name": "bitbucket"},
+	{"pattern": r"^(https://bitbucket.org)/(.+)$", "name": "bitbucket"},
 ]
 
 ## git Utility functions
@@ -76,6 +76,20 @@ def getforks(apiName, primary=None, remotes=None):
 				ghforkjson = json.loads(ghforks.read().decode('utf-8'))
 				for fork in ghforkjson:
 					forkList[fork["owner"]["login"]] = {"url": fork["git_url"]}
+
+	elif apiName == "bitbucket":
+		user, repo = deduceRepoInfo(remotes[primary]["url"])
+		print("Adding all Bitbucket forks of {}'s repository named `{}`".format(user, repo))
+		with urllib.request.urlopen("https://bitbucket.org/api/2.0/repositories/{}/{}".format(user, repo)) as hostinfo:
+			hostinfojson = json.loads(hostinfo.read().decode('utf-8'))
+
+			with urllib.request.urlopen("{}".format(hostinfojson["links"]["forks"]["href"], repo)) as hostforks:
+				hostforksjson = json.loads(hostforks.read().decode('utf-8'))
+				for fork in hostforksjson["values"]:
+					if fork["scm"] == "git":
+						for protocol in fork["links"]["clone"]:
+							if protocol["name"] == "https":
+								forkList[fork["owner"]["username"]] = {"url": protocol["href"]}
 	else:
 		print("API protocol unrecognized for '{}'. Please file a bug report to request support.".format(apiName))
 		return
