@@ -94,8 +94,9 @@ def getforks(apiName, primary=None, remotes=None):
 		print("API protocol unrecognized for '{}'. Please file a bug report to request support.".format(apiName))
 		return
 
+	existingRemoteURIs = [remotes[remote]["url"] for remote in remotes]
 	for fork in forkList:
-		if fork not in remotes:
+		if forkList[fork]["url"] not in existingRemoteURIs:
 			git_addremote(fork, forkList[fork]["url"])
 		else:
 			skippedRemotes.append(fork)
