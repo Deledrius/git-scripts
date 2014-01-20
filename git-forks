@@ -55,18 +55,22 @@ def deduceAPI(URI):
 			return entry["name"]
 	return None
 
+def deduceRepoInfo(URI):
+	for entry in apiPatterns:
+		matches = re.search(entry["pattern"], URI)
+		if matches:
+			return matches.group(2).strip(".git").split("/")
+	return None
+
 def getforks(apiName, primary=None, remotes=None):
 	skippedRemotes = []
 	forkList = {}
 
 	if apiName == "github":
-		URI = remotes[primary]["url"].split(":")[1].strip(".git")
-		user, repo = URI.split("/")
+		user, repo = deduceRepoInfo(remotes[primary]["url"])
 		print("Adding all GitHub forks of {}'s repository named `{}`".format(user, repo))
 		with urllib.request.urlopen("https://api.github.com/repos/{}/{}".format(user, repo)) as ghinfo:
 			ghinfojson = json.loads(ghinfo.read().decode('utf-8'))
-			#  Github is off by one about the number of forks, or else it's counting a repo as its own fork.
-			#print("{} forks found on GitHub.".format(ghinfojson["forks"] - 1))
 
 			with urllib.request.urlopen("{}?per_page=100".format(ghinfojson["forks_url"], repo)) as ghforks:
 				ghforkjson = json.loads(ghforks.read().decode('utf-8'))
@@ -100,7 +104,6 @@ def addall(remoteName):
 def main():
 	parser = argparse.ArgumentParser(description='A Utility for interfacing with remote forks.')
 	parser.add_argument("-a", "--addall", dest="addall", default="origin", help="Add all forks of the specified remote.")
-	#parser.add_argument("--list", dest="list", action="store_true", help="List all forks of the specified remote.")
 
 	args = parser.parse_args()
 
