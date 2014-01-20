@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+
+# This script is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This script is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this script.  If not, see <http://www.gnu.org/licenses/>.
+
+import os
+import sys
+import json
+import argparse
+import subprocess
+import urllib.request
+
+
+
+def gitaddremote(rname, rurl):
+	ret = subprocess.call(["git", "remote", "add", rname, rurl], stdout=sys.stdout, stderr=sys.stderr)
+	if ret != 0:
+		print("An error has occurred adding remote '{}' ({}).  Aborting.".format(rname, rurl))
+		return(-1)
+
+def addall(options):
+	api, URI = options.split(":")
+
+	if api == "github":
+		user, repo = URI.split("/")
+		print("Adding all GitHub forks of {}'s repos, {}".format(user, repo))
+		with urllib.request.urlopen("https://api.github.com/repos/{}/{}/forks?per_page=100".format(user, repo)) as ghforks:
+			ghforkjson = json.loads(ghforks.read().decode('utf-8'))
+			for fork in ghforkjson:
+				gitaddremote(fork["owner"]["login"], fork["git_url"])
+
+	else:
+		print("API protocol unrecognized for '{}'. Please file a bug report to have support added.".format(api))
+
+def main():
+	parser = argparse.ArgumentParser(description='A Utility for interfacing with remote forks.')
+	parser.add_argument("-a", "--addall", dest="addall", help="Add all forks from the specified project.")
+
+	args = parser.parse_args()
+
+	# Add further option checks here
+	if args.addall is not None:
+		addall(args.addall)
+
+
+if __name__ == '__main__': main()
