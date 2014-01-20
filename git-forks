@@ -22,13 +22,12 @@ import subprocess
 import urllib.request
 import configparser
 
-
-apiPatterns = [
-	{"pattern": r"^(git@github.com):(.+)$", "name": "github"},
-	{"pattern": r"^(https://github.com)/(.+)$", "name": "github"},
-	{"pattern": r"^(git@bitbucket.org):(.+)$", "name": "bitbucket"},
-	{"pattern": r"^(https://bitbucket.org)/(.+)$", "name": "bitbucket"},
-]
+# This expression is intended to match the following patterns:
+#   git@example.com:owner/project
+#   git://example.com/owner/project
+#   https://example.com/owner/project
+#  It captures the domain, and the owner/project path
+apiPattern = "^(?:https|git)(?:://|@)(.+?)(?:/|:)(.+)\.git$"
 
 ## git Utility functions
 def git_getremotes():
@@ -49,24 +48,22 @@ def git_addremote(rname, rurl):
 
 ## Forks functions
 def deduceAPI(URI):
-	for entry in apiPatterns:
-		matches = re.search(entry["pattern"], URI)
-		if matches:
-			return entry["name"]
+	matches = re.search(apiPattern, URI)
+	if matches:
+		return matches.group(1)
 	return None
 
 def deduceRepoInfo(URI):
-	for entry in apiPatterns:
-		matches = re.search(entry["pattern"], URI)
-		if matches:
-			return matches.group(2).strip(".git").split("/")
+	matches = re.search(apiPattern, URI)
+	if matches:
+		return matches.group(2).split("/")
 	return None
 
-def getforks(apiName, primary=None, remotes=None):
+def addforks(apiName, primary=None, remotes=None):
 	skippedRemotes = []
 	forkList = {}
 
-	if apiName == "github":
+	if apiName == "github.com":
 		user, repo = deduceRepoInfo(remotes[primary]["url"])
 		print("Adding all GitHub forks of {}'s repository named `{}`".format(user, repo))
 		with urllib.request.urlopen("https://api.github.com/repos/{}/{}".format(user, repo)) as ghinfo:
@@ -77,7 +74,7 @@ def getforks(apiName, primary=None, remotes=None):
 				for fork in ghforkjson:
 					forkList[fork["owner"]["login"]] = {"url": fork["git_url"]}
 
-	elif apiName == "bitbucket":
+	elif apiName == "bitbucket.org":
 		user, repo = deduceRepoInfo(remotes[primary]["url"])
 		print("Adding all Bitbucket forks of {}'s repository named `{}`".format(user, repo))
 		with urllib.request.urlopen("https://bitbucket.org/api/2.0/repositories/{}/{}".format(user, repo)) as hostinfo:
@@ -110,7 +107,7 @@ def addall(remoteName):
 		print("Checking remote named `{}` found at {} for forks...".format(remoteName, remotes[remoteName]["url"]))
 
 		apiName = deduceAPI(remotes[remoteName]["url"])
-		getforks(apiName, remoteName, remotes)
+		addforks(apiName, remoteName, remotes)
 	else:
 		print("Specified remote does not exist.")
 		return
