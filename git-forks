@@ -30,7 +30,7 @@ import configparser
 apiPattern = "^(?:https|git)(?:://|@)(.+?)(?:/|:)(.+)\.git$"
 
 ## git Utility functions
-def git_getremotes():
+def git_getlocalremotes():
 	remotes = {}
 	config = configparser.ConfigParser()
 	config.read(os.path.join(".git","config"))
@@ -42,7 +42,7 @@ def git_getremotes():
 def git_addremote(rname, rurl):
 	ret = subprocess.call(["git", "remote", "add", rname, rurl])
 	if ret != 0:
-		print("An error has occurred adding remote '{}' ({}).  Aborting.".format(rname, rurl))
+		print("An error has occurred adding remote `{}` ({}).  Aborting.".format(rname, rurl))
 		return(-1)
 
 
@@ -59,37 +59,44 @@ def deduceRepoInfo(URI):
 		return matches.group(2).split("/")
 	return None
 
-def addforks(apiName, primary=None, remotes=None):
-	skippedRemotes = []
+def getForkList(apiName, primary=None, remotes=None):
 	forkList = {}
 
-	if apiName == "github.com":
-		user, repo = deduceRepoInfo(remotes[primary]["url"])
-		print("Adding all GitHub forks of {}'s repository named `{}`".format(user, repo))
-		with urllib.request.urlopen("https://api.github.com/repos/{}/{}".format(user, repo)) as ghinfo:
-			ghinfojson = json.loads(ghinfo.read().decode('utf-8'))
+	try:
+		if apiName == "github.com":
+			user, repo = deduceRepoInfo(remotes[primary]["url"])
+			print("Finding all GitHub forks of {}'s repository named `{}`...".format(user, repo))
+			with urllib.request.urlopen("https://api.github.com/repos/{}/{}".format(user, repo)) as ghinfo:
+				ghinfojson = json.loads(ghinfo.read().decode('utf-8'))
 
-			with urllib.request.urlopen("{}?per_page=100".format(ghinfojson["forks_url"], repo)) as ghforks:
-				ghforkjson = json.loads(ghforks.read().decode('utf-8'))
-				for fork in ghforkjson:
-					forkList[fork["owner"]["login"]] = {"url": fork["git_url"]}
+				with urllib.request.urlopen("{}?per_page=100".format(ghinfojson["forks_url"], repo)) as ghforks:
+					ghforkjson = json.loads(ghforks.read().decode('utf-8'))
+					for fork in ghforkjson:
+						forkList[fork["owner"]["login"]] = {"url": fork["git_url"]}
 
-	elif apiName == "bitbucket.org":
-		user, repo = deduceRepoInfo(remotes[primary]["url"])
-		print("Adding all Bitbucket forks of {}'s repository named `{}`".format(user, repo))
-		with urllib.request.urlopen("https://bitbucket.org/api/2.0/repositories/{}/{}".format(user, repo)) as hostinfo:
-			hostinfojson = json.loads(hostinfo.read().decode('utf-8'))
+		elif apiName == "bitbucket.org":
+			user, repo = deduceRepoInfo(remotes[primary]["url"])
+			print("Finding all Bitbucket forks of {}'s repository named `{}`...".format(user, repo))
+			with urllib.request.urlopen("https://bitbucket.org/api/2.0/repositories/{}/{}".format(user, repo)) as hostinfo:
+				hostinfojson = json.loads(hostinfo.read().decode('utf-8'))
 
-			with urllib.request.urlopen("{}".format(hostinfojson["links"]["forks"]["href"], repo)) as hostforks:
-				hostforksjson = json.loads(hostforks.read().decode('utf-8'))
-				for fork in hostforksjson["values"]:
-					if fork["scm"] == "git":
-						for protocol in fork["links"]["clone"]:
-							if protocol["name"] == "https":
-								forkList[fork["owner"]["username"]] = {"url": protocol["href"]}
-	else:
-		print("API protocol unrecognized for '{}'. Please file a bug report to request support.".format(apiName))
-		return
+				with urllib.request.urlopen("{}".format(hostinfojson["links"]["forks"]["href"], repo)) as hostforks:
+					hostforksjson = json.loads(hostforks.read().decode('utf-8'))
+					for fork in hostforksjson["values"]:
+						if fork["scm"] == "git":
+							for protocol in fork["links"]["clone"]:
+								if protocol["name"] == "https":
+									forkList[fork["owner"]["username"]] = {"url": protocol["href"]}
+		else:
+			print("API protocol unrecognized for '{}'. Please file a bug report to request support.".format(apiName))
+	except urllib.error.HTTPError as e:
+		print("Unable to complete API request: {}".format(e))
+
+	return forkList
+
+def addForks(apiName, primary=None, remotes=None):
+	skippedRemotes = []
+	forkList = getForkList(apiName, primary, remotes)
 
 	existingRemoteURIs = [remotes[remote]["url"] for remote in remotes]
 	for fork in forkList:
@@ -101,15 +108,15 @@ def addforks(apiName, primary=None, remotes=None):
 	print("{} forks out of {} added as remotes.".format(len(forkList) - len(skippedRemotes), len(forkList)))
 
 def addall(remoteName):
-	remotes = git_getremotes()
+	remotes = git_getlocalremotes()
 
 	if remoteName in remotes:
 		print("Checking remote named `{}` found at {} for forks...".format(remoteName, remotes[remoteName]["url"]))
 
 		apiName = deduceAPI(remotes[remoteName]["url"])
-		addforks(apiName, remoteName, remotes)
+		addForks(apiName, remoteName, remotes)
 	else:
-		print("Specified remote does not exist.")
+		print("Specified remote `{}` does not exist.".format(remoteName))
 		return
 
 
