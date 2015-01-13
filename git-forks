@@ -59,12 +59,14 @@ def deduceRepoInfo(URI):
 		return matches.group(2).split("/")
 	return None
 
-def getForkList(apiName, primary=None, remotes=None):
+def getForkList(upstream=None, remotes=None):
+	print("Checking remote named `{}` found at {} for forks...".format(upstream, remotes[upstream]["url"]))
 	forkList = {}
+	apiName = deduceAPI(remotes[upstream]["url"])
 
 	try:
 		if apiName == "github.com":
-			user, repo = deduceRepoInfo(remotes[primary]["url"])
+			user, repo = deduceRepoInfo(remotes[upstream]["url"])
 			print("Finding all GitHub forks of {}'s repository named `{}`...".format(user, repo))
 			with urllib.request.urlopen("https://api.github.com/repos/{}/{}".format(user, repo)) as ghinfo:
 				ghinfojson = json.loads(ghinfo.read().decode('utf-8'))
@@ -75,7 +77,7 @@ def getForkList(apiName, primary=None, remotes=None):
 						forkList[fork["owner"]["login"]] = {"url": fork["git_url"]}
 
 		elif apiName == "bitbucket.org":
-			user, repo = deduceRepoInfo(remotes[primary]["url"])
+			user, repo = deduceRepoInfo(remotes[upstream]["url"])
 			print("Finding all Bitbucket forks of {}'s repository named `{}`...".format(user, repo))
 			with urllib.request.urlopen("https://bitbucket.org/api/2.0/repositories/{}/{}".format(user, repo)) as hostinfo:
 				hostinfojson = json.loads(hostinfo.read().decode('utf-8'))
@@ -94,41 +96,103 @@ def getForkList(apiName, primary=None, remotes=None):
 
 	return forkList
 
-def addForks(apiName, primary=None, remotes=None):
-	skippedRemotes = []
-	forkList = getForkList(apiName, primary, remotes)
 
-	existingRemoteURIs = [remotes[remote]["url"] for remote in remotes]
-	for fork in forkList:
-		if forkList[fork]["url"] not in existingRemoteURIs:
-			git_addremote(fork, forkList[fork]["url"])
-		else:
-			skippedRemotes.append(fork)
-
-	print("{} forks out of {} added as remotes.".format(len(forkList) - len(skippedRemotes), len(forkList)))
-
-def addall(remoteName):
-	remotes = git_getlocalremotes()
-
-	if remoteName in remotes:
-		print("Checking remote named `{}` found at {} for forks...".format(remoteName, remotes[remoteName]["url"]))
-
-		apiName = deduceAPI(remotes[remoteName]["url"])
-		addForks(apiName, remoteName, remotes)
-	else:
-		print("Specified remote `{}` does not exist.".format(remoteName))
+## Command line functions
+def command_add(args):
+	if not args.owners and not args.all:
+		print("Nothing to add.  Please specify an owner or use --all.  See --help for more information.")
 		return
 
+	remotes = git_getlocalremotes()
+	if not remotes:
+		print("No remotes found.  Please add at least one remote before attempting to add its forks.")
+		return
+
+	upstream = args.upstream
+	if upstream not in remotes:
+		print("Specified remote `{}` does not exist.".format(upstream))
+		return
+
+	forkList = getForkList(upstream, remotes)
+	if not forkList:
+		print("No forks of remote `{}` found.".format(upstream))
+		return
+
+	if args.owners and args.all:
+		print("Redunant owner(s) provided: adding all forks.")
+		args.owners = None
+
+	if args.owners and args.excludes:
+		print("Explicit owner(s) provided: ignoring --exclude.")
+
+	queuedRemotes = []
+	if args.owners:
+		for owner in args.owners:
+			if owner in forkList.keys():
+				queuedRemotes.append(owner)
+			else:
+				print("Fork owned by {} not found.  Skipping...".format(owner))
+	elif args.all:
+		queuedRemotes = [fork for fork in forkList]
+		if args.excludes:
+			for exclude in args.excludes:
+				if exclude in queuedRemotes:
+					queuedRemotes.remove(exclude)
+
+	addedRemotes = 0
+	existingRemoteURIs = [remotes[remote]["url"] for remote in remotes]
+	for remote in queuedRemotes:
+		if forkList[remote]["url"] not in existingRemoteURIs:
+			git_addremote(remote, forkList[remote]["url"])
+			addedRemotes = addedRemotes + 1
+	print("{} forks out of {} added as remotes.".format(addedRemotes, len(forkList)))
+
+def command_list(args):
+	upstream = args.upstream
+	remotes = git_getlocalremotes()
+
+	if upstream in remotes:
+		forkList = getForkList(upstream, remotes)
+		try:
+			maxLength = len(max(forkList, key=len))
+		except ValueError:
+			print("No forks of remote `{}` found.".format(upstream))
+		else:
+			if not args.nolocal:
+				print("\nRemotes already tracked locally are marked with '*':\n")
+			for fork in forkList:
+				isLocal = True if fork in remotes.keys() else False
+				if not (isLocal and args.nolocal):
+					print("{:2}{:{width}}\t{}".format("*" if isLocal else "", fork, forkList[fork]["url"], width=maxLength))
+	else:
+		print("Specified remote `{}` does not exist.".format(upstream))
 
 def main():
-	parser = argparse.ArgumentParser(description='A Utility for interfacing with remote forks.')
-	parser.add_argument("-a", "--addall", dest="addall", default="origin", help="Add all forks of the specified remote.")
+	parser = argparse.ArgumentParser(description="A utility for interfacing with remote forks.", prog="git forks")
+	subparsers = parser.add_subparsers()
+
+	# Shared options
+	shared_arguments = [
+		dict(args=["--upstream"], kwargs=dict(dest="upstream", default="origin", help="Use specified remote as the root repository when finding forks. (default: origin)"))
+	]
+
+	# 'Add' command options
+	parser_add  = subparsers.add_parser("add")
+	parser_add.add_argument(dest="owners", default=None, nargs="*", help="Name of repository owner(s) to add as remote.")
+	parser_add.add_argument("--exclude", dest="excludes", default=None, nargs="*", help="Name of repository owner(s) to exclude when using --all.")
+	parser_add.add_argument("--all", dest="all", action="store_true", help="Add all forks of the specified remote.")
+	for arg in shared_arguments:
+		parser_add.add_argument(*arg["args"], **arg["kwargs"])
+	parser_add.set_defaults(func=command_add)
+
+	# 'List' command options
+	parser_list = subparsers.add_parser("list")
+	parser_list.add_argument("--nonlocal", dest="nolocal", action="store_true", help="Show only forks which are not local remotes.")
+	for arg in shared_arguments:
+		parser_list.add_argument(*arg["args"], **arg["kwargs"])
+	parser_list.set_defaults(func=command_list)
 
 	args = parser.parse_args()
-
-	# Add further option checks here
-	if args.addall is not None:
-		addall(args.addall)
-
+	args.func(args)
 
 if __name__ == '__main__': main()
