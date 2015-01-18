@@ -15,12 +15,10 @@
 
 import os
 import re
-import sys
 import json
 import argparse
 import subprocess
 import urllib.request
-import configparser
 
 # This expression is intended to match the following patterns:
 #   git@example.com:owner/project
@@ -32,18 +30,24 @@ apiPattern = "^(?:https|git)(?:://|@)(.+?)(?:/|:)(.+)\.git$"
 ## git Utility functions
 def git_getlocalremotes():
     remotes = {}
-    config = configparser.ConfigParser()
-    config.read(os.path.join(".git","config"))
-    for section in config.sections():
-        if section[0:6] == "remote":
-            remotes[section[8:-1]] = {"url": config[section]["url"]}
+    try:
+        ret = subprocess.check_output(["git", "remote", "--verbose"], stdin=open(os.devnull,"w"))
+    except subprocess.CalledProcessError as e:
+        print("An error has occurred acquiring remotes.")
+        return None
+    else:
+        for line in ret.decode("utf-8").splitlines():
+            remote = line.split()
+            if remote[2] == "(fetch)":
+                remotes[remote[0]] = {"url": remote[1]}
     return remotes
 
 def git_addremote(rname, rurl):
     ret = subprocess.call(["git", "remote", "add", rname, rurl])
     if ret != 0:
         print("An error has occurred adding remote `{}` ({}).  Aborting.".format(rname, rurl))
-        return(-1)
+        return False
+    return True
 
 
 ## Forks functions
@@ -143,13 +147,16 @@ def command_add(args):
     existingRemoteURIs = [remotes[remote]["url"] for remote in remotes]
     for remote in queuedRemotes:
         if forkList[remote]["url"] not in existingRemoteURIs:
-            git_addremote(remote, forkList[remote]["url"])
-            addedRemotes = addedRemotes + 1
+            if git_addremote(remote, forkList[remote]["url"]):
+                addedRemotes += 1
     print("{} forks out of {} added as remotes.".format(addedRemotes, len(forkList)))
 
 def command_list(args):
     upstream = args.upstream
     remotes = git_getlocalremotes()
+    if not remotes:
+        print("No remotes found.  Please add at least one remote before attempting to list its forks.")
+        return
 
     if upstream in remotes:
         forkList = getForkList(upstream, remotes)
