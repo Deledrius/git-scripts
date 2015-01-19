@@ -167,8 +167,9 @@ def command_list(args):
         else:
             if not args.nolocal:
                 print("\nRemotes already tracked locally are marked with '*':\n")
+            existingRemoteURIs = [remotes[remote]["url"] for remote in remotes]
             for fork in forkList:
-                isLocal = True if fork in remotes.keys() else False
+                isLocal = True if forkList[fork]["url"] in existingRemoteURIs else False
                 if not (isLocal and args.nolocal):
                     print("{:2}{:{width}}\t{}".format("*" if isLocal else "", fork, forkList[fork]["url"], width=maxLength))
     else:
