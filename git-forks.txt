@@ -1,0 +1,63 @@
+git-forks(1)
+============
+
+NAME
+----
+git-forks - A utility for interfacing with remote forks
+
+SYNOPSIS
+--------
+[verse]
+'git forks' list [--nonlocal] [--upstream <remote>]
+'git forks' add [--all|<forkname>] [--exclude <forkname>]
+		 [--upstream <remote>]
+
+DESCRIPTION
+-----------
+
+Use `git forks` when you want to operate on local remotes connected
+to remotely-hosted repositories, provided by services such as
+GitHub or Bitbucket. This command allows you to list all available
+remote forks, as well as add one, several, or all as locally-tracked
+remotes.
+
+
+OPTIONS
+-------
+
+add [--all|<forkname>] [--exclude <forkname>] [--upstream <remote>]::
+
+	Add a remote fork as a locally-tracked remote.
++
+If the `--all` option is used, all available forks will be added as
+locally-tracked remotes.  The `--exclude` option can be used in conjuction
+with `--all` to prevent one or more forks from being added, specified by
+their names (see 'list').
++
+If the `--upstream` option is used, the named remote is used as the root
+repository for the purpose of finding hosted forks.  The default action
+assumes 'origin'.
++
+If one or more fork names are listed (see 'list') only those remotes will
+be added locally.
+
+list [--nonlocal] [--upstream <remote>]::
+
+	List the available forks.  Forks which are already tracked locally
+	as remotes are indicated visually.
++
+If the `--upstream` option is used, the named remote is used as the root
+repository for the purpose of finding hosted forks.  The default action
+assumes 'origin'.
++
+If the `--nonlocal` option is used, only forks which are not currently
+locally-tracked are shown.
+
+
+DISCUSSION
+----------
+
+A fork is workflow-specific concept which implies a hierarchy not
+inherently native to git.  This command grafts the ability to work
+with them, as encouraged by various repository hosting providers,
+onto the command line.
