@@ -8,9 +8,9 @@ git-forks - A utility for interfacing with remote forks
 SYNOPSIS
 --------
 [verse]
-'git forks' list [--nonlocal] [--upstream <remote>]
-'git forks' add [--all|<forkname>] [--exclude <forkname>]
-		 [--upstream <remote>]
+'git forks' list [-n|--nonlocal] [-u|--upstream <remote>]
+'git forks' add [-a|--all|<forkname>] [-x|--exclude <forkname>]
+		 [-u|--upstream <remote>]
 
 DESCRIPTION
 -----------
@@ -25,7 +25,7 @@ remotes.
 OPTIONS
 -------
 
-add [--all|<forkname>] [--exclude <forkname>] [--upstream <remote>]::
+add [-a|--all|<forkname>] [-x|--exclude <forkname>] [-u|--upstream <remote>]::
 
 	Add a remote fork as a locally-tracked remote.
 +
@@ -41,7 +41,7 @@ assumes 'origin'.
 If one or more fork names are listed (see 'list') only those remotes will
 be added locally.
 
-list [--nonlocal] [--upstream <remote>]::
+list [-n|--nonlocal] [-u|--upstream <remote>]::
 
 	List the available forks.  Forks which are already tracked locally
 	as remotes are indicated visually.

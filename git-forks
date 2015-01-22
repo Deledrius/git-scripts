@@ -181,21 +181,21 @@ def main():
 
     # Shared options
     shared_arguments = [
-        dict(args=["--upstream"], kwargs=dict(dest="upstream", default="origin", help="Use specified remote as the root repository when finding forks. (default: origin)"))
+        dict(args=["-u", "--upstream"], kwargs=dict(dest="upstream", default="origin", help="Use specified remote as the root repository when finding forks. (default: origin)"))
     ]
 
     # 'Add' command options
     parser_add  = subparsers.add_parser("add")
     parser_add.add_argument(dest="owners", default=None, nargs="*", help="Name of repository owner(s) to add as remote.")
-    parser_add.add_argument("--exclude", dest="excludes", default=None, nargs="*", help="Name of repository owner(s) to exclude when using --all.")
-    parser_add.add_argument("--all", dest="all", action="store_true", help="Add all forks of the specified remote.")
+    parser_add.add_argument("-x", "--exclude", dest="excludes", default=None, nargs="*", help="Name of repository owner(s) to exclude when using --all.")
+    parser_add.add_argument("-a", "--all", dest="all", action="store_true", help="Add all forks of the specified remote.")
     for arg in shared_arguments:
         parser_add.add_argument(*arg["args"], **arg["kwargs"])
     parser_add.set_defaults(func=command_add)
 
     # 'List' command options
     parser_list = subparsers.add_parser("list")
-    parser_list.add_argument("--nonlocal", dest="nolocal", action="store_true", help="Show only forks which are not local remotes.")
+    parser_list.add_argument("-n", "--nonlocal", dest="nolocal", action="store_true", help="Show only forks which are not local remotes.")
     for arg in shared_arguments:
         parser_list.add_argument(*arg["args"], **arg["kwargs"])
     parser_list.set_defaults(func=command_list)
