@@ -75,10 +75,24 @@ def getForkList(upstream=None, remotes=None):
             with urllib.request.urlopen("https://api.github.com/repos/{}/{}".format(user, repo)) as ghinfo:
                 ghinfojson = json.loads(ghinfo.read().decode('utf-8'))
 
-                with urllib.request.urlopen("{}?per_page=100".format(ghinfojson["forks_url"], repo)) as ghforks:
-                    ghforkjson = json.loads(ghforks.read().decode('utf-8'))
-                    for fork in ghforkjson:
-                        forkList[fork["owner"]["login"]] = {"url": fork["git_url"]}
+                currentPage = "{}?per_page=100".format(ghinfojson["forks_url"])
+                donePaging = False
+                while not donePaging:
+                    with urllib.request.urlopen(currentPage) as ghforks:
+                        ghforkjson = json.loads(ghforks.read().decode('utf-8'))
+                        for fork in ghforkjson:
+                            forkList[fork["owner"]["login"]] = {"url": fork["git_url"]}
+
+                        # If pagination exists, parse subsequent pages
+                        pageLinks = None
+                        if "Link" in ghforks.info().keys():
+                            pagePattern = "<(.*?)>; rel=\"(.*?)\""
+                            pageLinks = {link[1]:link[0] for link in re.findall(pagePattern, ghforks.info().get("Link"))}
+
+                        if pageLinks and "next" in pageLinks.keys():
+                            currentPage = pageLinks["next"]
+                        else:
+                            donePaging = True
 
         elif apiName == "bitbucket.org":
             user, repo = deduceRepoInfo(remotes[upstream]["url"])
